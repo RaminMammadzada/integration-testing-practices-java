@@ -1,7 +1,9 @@
 package com.medibridge.pulse.service;
 
 import com.medibridge.pulse.domain.Model;
+import com.medibridge.pulse.domain.Model.Alarm;
 import com.medibridge.pulse.domain.Model.AlarmSeverity;
+import com.medibridge.pulse.domain.Model.AuditEvent;
 import com.medibridge.pulse.domain.Model.Device;
 import com.medibridge.pulse.domain.Model.DeviceAssignment;
 import com.medibridge.pulse.domain.Model.DeviceStatus;
@@ -14,8 +16,12 @@ import com.medibridge.pulse.domain.Model.MaintenanceTicket;
 import com.medibridge.pulse.domain.Model.PlatformHealth;
 import com.medibridge.pulse.domain.Model.TherapySession;
 import com.medibridge.pulse.domain.Model.TherapyState;
-import com.medibridge.pulse.domain.Model.Alarm;
-import com.medibridge.pulse.domain.Model.AuditEvent;
+import com.medibridge.pulse.infra.integration.DomainEventPublisher;
+import com.medibridge.pulse.infra.integration.EmrGateway;
+import com.medibridge.pulse.infra.persistence.DomainEventEntity;
+import com.medibridge.pulse.infra.persistence.DomainEventRepository;
+import com.medibridge.pulse.infra.persistence.EmrDocumentEntity;
+import com.medibridge.pulse.infra.persistence.EmrDocumentRepository;
 import org.springframework.stereotype.Service;
 
 import java.time.Instant;
@@ -29,16 +35,30 @@ import java.util.concurrent.ConcurrentHashMap;
 @Service
 public class PlatformService {
 
+    private final DomainEventRepository domainEventRepository;
+    private final EmrDocumentRepository emrDocumentRepository;
+    private final DomainEventPublisher eventPublisher;
+    private final EmrGateway emrGateway;
+
     private final Map<UUID, Device> devices = new ConcurrentHashMap<>();
     private final Map<UUID, DeviceAssignment> assignments = new ConcurrentHashMap<>();
     private final Map<UUID, InfusionOrder> infusionOrders = new ConcurrentHashMap<>();
     private final Map<UUID, TherapySession> therapies = new ConcurrentHashMap<>();
     private final Map<UUID, DrugLibrary> drugLibraries = new ConcurrentHashMap<>();
     private final Map<UUID, Alarm> alarms = new ConcurrentHashMap<>();
-    private final Map<UUID, EmrDocument> emrDocs = new ConcurrentHashMap<>();
     private final Map<UUID, MaintenanceTicket> maintenanceTickets = new ConcurrentHashMap<>();
     private final Map<UUID, AuditEvent> auditEvents = new ConcurrentHashMap<>();
     private final List<DomainEvent> eventLog = new ArrayList<>();
+
+    public PlatformService(DomainEventRepository domainEventRepository,
+                           EmrDocumentRepository emrDocumentRepository,
+                           DomainEventPublisher eventPublisher,
+                           EmrGateway emrGateway) {
+        this.domainEventRepository = domainEventRepository;
+        this.emrDocumentRepository = emrDocumentRepository;
+        this.eventPublisher = eventPublisher;
+        this.emrGateway = emrGateway;
+    }
 
     public List<Device> devices() { return devices.values().stream().toList(); }
     public List<DeviceAssignment> assignments() { return assignments.values().stream().toList(); }
@@ -46,10 +66,16 @@ public class PlatformService {
     public List<TherapySession> therapies() { return therapies.values().stream().toList(); }
     public List<DrugLibrary> libraries() { return drugLibraries.values().stream().toList(); }
     public List<Alarm> alarms() { return alarms.values().stream().toList(); }
-    public List<EmrDocument> emrDocuments() { return emrDocs.values().stream().toList(); }
     public List<MaintenanceTicket> maintenanceTickets() { return maintenanceTickets.values().stream().toList(); }
     public List<AuditEvent> auditEvents() { return auditEvents.values().stream().toList(); }
     public List<DomainEvent> eventLog() { return List.copyOf(eventLog); }
+
+    public List<EmrDocument> emrDocuments() {
+        return emrDocumentRepository.findAll().stream()
+                .map(doc -> new EmrDocument(doc.getId(), doc.getTherapySessionId(), doc.getEventType(), doc.getPayload(),
+                        doc.getExportStatus(), doc.getRetryCount(), doc.getCreatedAt()))
+                .toList();
+    }
 
     public Device registerDevice(String serial, String model, String firmware, String hospital, String ward, String bed) {
         Device device = new Device(UUID.randomUUID(), serial, model, firmware, hospital, ward, bed,
@@ -60,7 +86,7 @@ public class PlatformService {
     }
 
     public DeviceAssignment assignDevice(UUID deviceId, String patientId, String careUnit, String nurse) {
-        Device current = devices.get(deviceId);
+        Device current = getRequiredDevice(deviceId);
         Device updated = new Device(current.id(), current.serialNumber(), current.model(), current.firmwareVersion(),
                 current.hospital(), current.ward(), current.bed(), DeviceStatus.ASSIGNED,
                 current.batteryLevel(), current.wifiStrength(), Instant.now());
@@ -89,7 +115,7 @@ public class PlatformService {
     }
 
     public TherapySession recordProgress(UUID sessionId, double infusedMl, double remainingMl) {
-        TherapySession current = therapies.get(sessionId);
+        TherapySession current = getRequiredTherapySession(sessionId);
         TherapySession updated = new TherapySession(current.id(), current.orderId(), current.deviceId(), current.state(),
                 current.startedAt(), current.endedAt(), infusedMl, remainingMl);
         therapies.put(sessionId, updated);
@@ -98,7 +124,7 @@ public class PlatformService {
     }
 
     public TherapySession completeTherapy(UUID sessionId) {
-        TherapySession current = therapies.get(sessionId);
+        TherapySession current = getRequiredTherapySession(sessionId);
         TherapySession updated = new TherapySession(current.id(), current.orderId(), current.deviceId(), TherapyState.COMPLETED,
                 current.startedAt(), Instant.now(), current.infusedVolumeMl(), 0.0);
         therapies.put(sessionId, updated);
@@ -123,7 +149,7 @@ public class PlatformService {
     }
 
     public Alarm acknowledgeAlarm(UUID alarmId, String nurse) {
-        Alarm current = alarms.get(alarmId);
+        Alarm current = getRequiredAlarm(alarmId);
         Alarm updated = new Alarm(current.id(), current.deviceId(), current.patientId(), current.severity(), current.category(),
                 current.message(), current.raisedAt(), Instant.now(), nurse);
         alarms.put(alarmId, updated);
@@ -140,10 +166,22 @@ public class PlatformService {
     }
 
     public EmrDocument createEmrDocument(UUID sessionId, String eventType, String payload) {
-        EmrDocument doc = new EmrDocument(UUID.randomUUID(), sessionId, eventType, payload, "EXPORTED", 0, Instant.now());
-        emrDocs.put(doc.id(), doc);
-        appendEvent("DocumentationExported", "EmrIntegration", "DOCUMENTATION_EXPORTED", doc.id().toString());
-        return doc;
+        UUID id = UUID.randomUUID();
+        EmrDocumentEntity entity = new EmrDocumentEntity();
+        entity.setId(id);
+        entity.setTherapySessionId(sessionId);
+        entity.setEventType(eventType);
+        entity.setPayload(payload);
+        entity.setExportStatus("EXPORTED");
+        entity.setRetryCount(0);
+        entity.setCreatedAt(Instant.now());
+        emrDocumentRepository.save(entity);
+
+        String correlationId = appendEvent("DocumentationExported", "EmrIntegration", "DOCUMENTATION_EXPORTED", id.toString());
+        emrGateway.exportDocument(eventType, payload, correlationId);
+
+        return new EmrDocument(entity.getId(), entity.getTherapySessionId(), entity.getEventType(), entity.getPayload(),
+                entity.getExportStatus(), entity.getRetryCount(), entity.getCreatedAt());
     }
 
     public PlatformHealth platformHealth() {
@@ -157,10 +195,48 @@ public class PlatformService {
         );
     }
 
-    private void appendEvent(String type, String producer, String auditAction, String resource) {
+    private String appendEvent(String type, String producer, String auditAction, String resource) {
         String correlation = UUID.randomUUID().toString();
-        eventLog.add(new DomainEvent(UUID.randomUUID(), type, producer, correlation, Instant.now(), resource));
+        DomainEvent event = new DomainEvent(UUID.randomUUID(), type, producer, correlation, Instant.now(), resource);
+        eventLog.add(event);
+
+        DomainEventEntity eventEntity = new DomainEventEntity();
+        eventEntity.setId(event.id());
+        eventEntity.setEventType(event.type());
+        eventEntity.setProducer(event.producer());
+        eventEntity.setCorrelationId(event.correlationId());
+        eventEntity.setOccurredAt(event.occurredAt());
+        eventEntity.setPayload(event.payload());
+        domainEventRepository.save(eventEntity);
+
+        eventPublisher.publish(event);
+
         AuditEvent audit = new AuditEvent(UUID.randomUUID(), producer, auditAction, resource, correlation, Instant.now());
         auditEvents.put(audit.id(), audit);
+        return correlation;
+    }
+
+    private Device getRequiredDevice(UUID deviceId) {
+        Device device = devices.get(deviceId);
+        if (device == null) {
+            throw new IllegalArgumentException("Device not found: " + deviceId);
+        }
+        return device;
+    }
+
+    private TherapySession getRequiredTherapySession(UUID sessionId) {
+        TherapySession session = therapies.get(sessionId);
+        if (session == null) {
+            throw new IllegalArgumentException("Therapy session not found: " + sessionId);
+        }
+        return session;
+    }
+
+    private Alarm getRequiredAlarm(UUID alarmId) {
+        Alarm alarm = alarms.get(alarmId);
+        if (alarm == null) {
+            throw new IllegalArgumentException("Alarm not found: " + alarmId);
+        }
+        return alarm;
     }
 }

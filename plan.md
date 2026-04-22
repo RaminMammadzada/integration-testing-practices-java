@@ -1,93 +1,59 @@
-# MediBridge Pulse Platform — Delivery Plan
+# MediBridge Pulse Platform — Execution Plan and Status
 
-This file tracks what was planned, what has been implemented, and what is still pending.
+## Mission
 
-## 1) Planning baseline
+Turn this repository into a reusable reference for **integration testing best practices** with Spring Boot + Testcontainers + external system simulation.
 
-## Phase 1 — Foundation
-- [x] Bootstrap Spring Boot 3.3 / Java 21 service.
-- [x] Add build/test/runtime dependencies.
-- [x] Add application configuration and startup entrypoint.
+## Phase plan
 
-## Phase 2 — Domain and architecture skeleton
-- [x] Define core domain entities and enums for:
-  - Device Fleet
-  - Infusion Therapy
-  - Drug Libraries
-  - Alarms
-  - EMR Documentation
-  - Maintenance
-  - Compliance/Audit
-- [x] Define a unified event model (`DomainEvent`) and trace model (`AuditEvent`).
+## Phase 1 — Platform foundation
+- [x] Spring Boot scaffold, API layer, domain model, baseline documentation.
 
-## Phase 3 — Workflow implementation
-- [x] Implement in-memory orchestration service with workflow methods:
-  - Device registration and assignment
-  - Infusion order creation
-  - Therapy start/progress/complete
-  - Drug library approval
-  - Alarm raise/acknowledge
-  - Maintenance ticket creation
-  - EMR export document creation
-- [x] Emit domain event + audit event for workflow actions.
+## Phase 2 — Persistence and integration boundaries
+- [x] Add PostgreSQL-backed persistence for integration artifacts (EMR documents, domain events).
+- [x] Add Flyway baseline migration.
+- [x] Add EMR HTTP gateway abstraction.
+- [x] Add Kafka domain event publisher abstraction.
 
-## Phase 4 — API surface
-- [x] Expose workflow-first REST resources:
-  - `/devices`
-  - `/device-assignments`
-  - `/infusion-orders`
-  - `/therapy-sessions`
-  - `/drug-libraries`
-  - `/alarms`
-  - `/emr-documents`
-  - `/maintenance-tickets`
-  - `/audit-events`
-  - `/events`
-  - `/platform-health`
-- [x] Add request validation on inbound DTOs.
+## Phase 3 — Professional integration testing setup
+- [x] Introduce `AbstractBaseIT` with singleton Testcontainers (PostgreSQL + Kafka).
+- [x] Add WireMock external system simulation.
+- [x] Ensure boot order: external systems before Spring context via `@DynamicPropertySource`.
+- [x] Add profile-based integration configuration (`@ActiveProfiles("integration")`).
+- [x] Add JUnit platform properties for controlled parallel settings.
 
-## Phase 5 — Demonstration readiness
-- [x] Seed realistic sample data at startup.
-- [x] Add README with architecture story, API map, and run instructions.
-- [x] Add Dockerfile and docker-compose for containerized run.
-- [x] Add basic test coverage for health + seeded data behavior.
+## Phase 4 — Meaningful integration scenarios
+- [x] End-to-end workflow test with API + DB + Kafka + EMR side effects.
+- [x] Repeated test demonstrating isolated test data generation.
+- [x] Document disabled-test usage as course material.
+
+## Phase 5 — Educational documentation
+- [x] Expand README for test architecture orientation.
+- [x] Add integration testing course markdown with diagrams and practical guidance.
 
 ---
 
-## 2) Implementation status summary
+## Implemented vs pending
 
-### Implemented now (current repository state)
-- **Completed:** Phases 1–5 (initial reference platform delivery)
-- **Coverage:** Foundation + core workflows + API exposure + containerization + baseline tests
+### Implemented now
+- Full initial scaffold
+- PostgreSQL/Flyway integration slice
+- Kafka + WireMock integration hooks
+- Abstract integration test base class
+- Meaningful integration tests across boundaries
+- Course-style documentation
 
-### Not implemented yet (next iterations)
-- [ ] Persistent storage (PostgreSQL) and repository layer
-- [ ] Outbox/inbox pattern for reliable event delivery
-- [ ] Broker integration (Kafka/RabbitMQ)
-- [ ] Retry + idempotency policies per external integration
-- [ ] Role-based security (OAuth2/JWT) and audit access controls
-- [ ] Contract tests for external system adapters
-- [ ] OpenAPI spec generation and API versioning policy
-- [ ] Operational dashboards and SLO/error-budget instrumentation
+### Pending next (advanced)
+- [ ] Outbox pattern and transactional messaging guarantees
+- [ ] Kafka consumer integration flow and DLQ patterns
+- [ ] Feature toggle matrix tests (`featureX=true/false`)
+- [ ] CI pipeline profiles for split test stages
+- [ ] Broader domain persistence beyond current integration artifacts
 
----
-
-## 3) Traceability: plan vs implementation
-
-| Planned area | Implemented artifact |
-|---|---|
-| Foundation | `pom.xml`, `application.yml`, `MediBridgePulseApplication.java` |
-| Domain model | `src/main/java/com/medibridge/pulse/domain/Model.java` |
-| Workflow service | `src/main/java/com/medibridge/pulse/service/PlatformService.java` |
-| REST APIs | `src/main/java/com/medibridge/pulse/api/PlatformController.java` |
-| Seed data | `src/main/java/com/medibridge/pulse/seed/SampleDataInitializer.java` |
-| Validation tests | `src/test/java/com/medibridge/pulse/MediBridgePulseApplicationTests.java` |
-| Documentation | `README.md`, `plan.md` |
-| Containerization | `Dockerfile`, `docker-compose.yml` |
-
----
-
-## 4) Short answer to "how much is implemented?"
-
-For the **initial reference scope**, implementation is **complete** (100% of planned Phases 1–5).
-For the **production-hardening scope**, the roadmap items in section 2 are still pending.
+## Maintenance updates
+- [x] Resolved branch-level documentation/build/service configuration overlap on:
+  - `README.md`
+  - `plan.md`
+  - `pom.xml`
+  - `PlatformService`
+  - `application.yml`

@@ -1,0 +1,11 @@
+spring:
+  jpa:
+    show-sql: false
+  flyway:
+    clean-disabled: true
+
+integration:
+  kafka:
+    enabled: true
+  emr:
+    enabled: true

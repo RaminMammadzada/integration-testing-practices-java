@@ -2,62 +2,46 @@
 
 A cloud-native Spring Boot reference platform for connected hospital infusion-device integration, event-driven clinical workflows, EMR interoperability, and regulated healthcare traceability.
 
-## 1) Problem statement
+## Repository purpose
 
-Modern hospitals run large fleets of connected infusion devices across ICUs, oncology wards, surgery units, emergency departments, pediatrics, and renal care units. Clinical teams and biomedical engineering teams depend on interoperable software that can coordinate telemetry, alarms, infusion workflow data, and documentation exports safely.
+This repository is designed as **professional educational material** for integration testing practices in Java with Spring Boot, Testcontainers, and realistic external-system boundaries.
 
-This project models a secure integration hub that coordinates:
+## Architecture snapshot
 
-- Infusion device fleet operations
-- Infusion order and therapy-session workflows
-- Drug-library safety deployment
-- Alarm routing and acknowledgements
-- EMR documentation exports
-- Maintenance workflows and compliance-grade audit traces
+```mermaid
+flowchart LR
+  API[Workflow REST API] --> SVC[PlatformService]
+  SVC --> MEM[In-memory workflow state]
+  SVC --> PG[(PostgreSQL via JPA)]
+  SVC --> KAFKA[(Kafka topic medibridge.domain-events)]
+  SVC --> EMR[External EMR HTTP endpoint]
+```
 
-## 2) Architecture at a glance
+## Bounded contexts represented
 
-`MediBridge Pulse Platform` is implemented as a modular Spring Boot application with workflow-oriented APIs.
+- Device Fleet Management
+- Infusion Therapy Management
+- Drug Library Safety
+- Clinical Documentation Integration
+- Alarm and Escalation Management
+- Biomedical Maintenance
+- Compliance and Audit Traceability
 
-### Bounded-context inspired modules
+## Integration-test-first structure
 
-- **Device Fleet Management**: device registration, assignment, status and heartbeat modeling
-- **Infusion Therapy Management**: infusion orders, therapy sessions, progress updates
-- **Drug Library Safety**: library approval and deployment references
-- **Clinical Documentation Integration**: generated EMR documentation events
-- **Alarm & Escalation Management**: raise/acknowledge alarms with severity
-- **Biomedical Maintenance**: maintenance ticket creation
-- **Compliance & Audit**: immutable audit event timeline + domain event log
+### Key practices implemented
 
-### Event-driven style
+- `AbstractBaseIT` for shared bootstrapping and dynamic wiring
+- Singleton reusable containers (PostgreSQL + Kafka)
+- WireMock-managed external EMR system
+- Boot order: **containers first**, then Spring context
+- Unique data per test to avoid interference
+- Parallel settings configured but deterministic (`same_thread`)
+- Flyway baseline migration for fast schema startup
 
-Each workflow operation appends:
+See detailed course content in: [`docs/integration-testing-course.md`](docs/integration-testing-course.md)
 
-1. A **domain event** (integration/event-log view)
-2. A corresponding **audit event** (traceability/compliance view)
-
-This creates a simple event backbone suitable for later replacement with Kafka or another broker.
-
-## 3) Step-by-step implementation plan used in this repository
-
-1. **Scaffold platform**
-   - Spring Boot setup
-   - Java 21 baseline
-   - REST + Validation + Actuator
-2. **Build domain model**
-   - Device, Assignment, InfusionOrder, TherapySession, DrugLibrary, Alarm, EmrDocument, MaintenanceTicket, AuditEvent, DomainEvent
-3. **Implement workflow service layer**
-   - In-memory platform service
-   - Event and audit append logic
-4. **Expose workflow-oriented APIs**
-   - `/devices`, `/device-assignments`, `/infusion-orders`, `/therapy-sessions`, `/drug-libraries`, `/alarms`, `/emr-documents`, `/maintenance-tickets`, `/audit-events`, `/platform-health`
-5. **Seed realistic hospital world data**
-   - Multiple hospitals/wards/roles/medications
-6. **Containerize and document**
-   - Dockerfile + docker-compose
-   - API examples
-
-## 4) API resources
+## API resources
 
 - `GET/POST /devices`
 - `GET/POST /device-assignments`
@@ -75,71 +59,52 @@ This creates a simple event backbone suitable for later replacement with Kafka o
 - `GET /events`
 - `GET /platform-health`
 
-## 5) Quick start
+## Quick start
 
-### Local Java run
-
-```bash
-./mvnw spring-boot:run
-```
-
-or
+### Local run
 
 ```bash
 mvn spring-boot:run
 ```
 
-### Docker Compose run
+### Run unit/smoke tests (Surefire)
+
+```bash
+mvn test
+```
+
+### Run full verification including integration tests (Failsafe + Testcontainers)
+
+```bash
+mvn verify
+```
+
+If Docker is unavailable in your environment, run:
+
+```bash
+mvn verify -DskipITs=true
+```
+
+### Dockerized app run
 
 ```bash
 docker compose up --build
 ```
 
-App URL: `http://localhost:8080`
+## Test suite map
 
-## 6) Example calls
+- `MediBridgePulseApplicationTests`
+  - context + API smoke checks
+- `PlatformWorkflowIntegrationTest`
+  - workflow integration via MockMvc
+  - PostgreSQL persistence assertions
+  - Kafka publication assertions
+  - WireMock external EMR verification
+  - repeated test for isolation stability
 
-Register device:
+## Future track
 
-```bash
-curl -X POST http://localhost:8080/devices \
-  -H 'Content-Type: application/json' \
-  -d '{
-    "serialNumber":"MB-ICU-4040",
-    "model":"PulseFlow X2",
-    "firmwareVersion":"FW-3.5.0",
-    "hospital":"Rhein-Neckar Care Hospital",
-    "ward":"ICU",
-    "bed":"ICU-08"
-  }'
-```
-
-Create infusion order:
-
-```bash
-curl -X POST http://localhost:8080/infusion-orders \
-  -H 'Content-Type: application/json' \
-  -d '{
-    "medication":"Paracetamol IV",
-    "dose":"1000 mg",
-    "rate":"5 mg/min",
-    "patientId":"PAT-88120",
-    "physician":"Dr. A. Lorenz",
-    "pharmacyApproval":"PHARMACY_APPROVED"
-  }'
-```
-
-Inspect platform health:
-
-```bash
-curl http://localhost:8080/platform-health
-```
-
-## 7) Future enhancements
-
-- Replace in-memory store with PostgreSQL + outbox table
-- Introduce message broker integration (Kafka/RabbitMQ)
-- Add idempotency keys and distributed tracing headers
-- Add OAuth2/JWT security and role-based authorization
-- Provide OpenAPI contracts and contract tests
-- Add realistic external-system simulators (EMR, pharmacy, maintenance vendor)
+- Outbox/inbox reliability patterns
+- Feature-flagged `@SpringBootTest(properties = "featureX=true/false")` scenarios
+- Contract tests for third-party integration boundaries
+- CI split strategy for fast lane vs full integration lane
