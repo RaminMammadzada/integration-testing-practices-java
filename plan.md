@@ -49,3 +49,11 @@ Turn this repository into a reusable reference for **integration testing best pr
 - [ ] Feature toggle matrix tests (`featureX=true/false`)
 - [ ] CI pipeline profiles for split test stages
 - [ ] Broader domain persistence beyond current integration artifacts
+
+## Maintenance updates
+- [x] Resolved branch-level documentation/build/service configuration overlap on:
+  - `README.md`
+  - `plan.md`
+  - `pom.xml`
+  - `PlatformService`
+  - `application.yml`

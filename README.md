@@ -79,6 +79,12 @@ mvn test
 mvn verify
 ```
 
+If Docker is unavailable in your environment, run:
+
+```bash
+mvn verify -DskipITs=true
+```
+
 ### Dockerized app run
 
 ```bash

@@ -86,7 +86,7 @@ public class PlatformService {
     }
 
     public DeviceAssignment assignDevice(UUID deviceId, String patientId, String careUnit, String nurse) {
-        Device current = devices.get(deviceId);
+        Device current = getRequiredDevice(deviceId);
         Device updated = new Device(current.id(), current.serialNumber(), current.model(), current.firmwareVersion(),
                 current.hospital(), current.ward(), current.bed(), DeviceStatus.ASSIGNED,
                 current.batteryLevel(), current.wifiStrength(), Instant.now());
@@ -115,7 +115,7 @@ public class PlatformService {
     }
 
     public TherapySession recordProgress(UUID sessionId, double infusedMl, double remainingMl) {
-        TherapySession current = therapies.get(sessionId);
+        TherapySession current = getRequiredTherapySession(sessionId);
         TherapySession updated = new TherapySession(current.id(), current.orderId(), current.deviceId(), current.state(),
                 current.startedAt(), current.endedAt(), infusedMl, remainingMl);
         therapies.put(sessionId, updated);
@@ -124,7 +124,7 @@ public class PlatformService {
     }
 
     public TherapySession completeTherapy(UUID sessionId) {
-        TherapySession current = therapies.get(sessionId);
+        TherapySession current = getRequiredTherapySession(sessionId);
         TherapySession updated = new TherapySession(current.id(), current.orderId(), current.deviceId(), TherapyState.COMPLETED,
                 current.startedAt(), Instant.now(), current.infusedVolumeMl(), 0.0);
         therapies.put(sessionId, updated);
@@ -149,7 +149,7 @@ public class PlatformService {
     }
 
     public Alarm acknowledgeAlarm(UUID alarmId, String nurse) {
-        Alarm current = alarms.get(alarmId);
+        Alarm current = getRequiredAlarm(alarmId);
         Alarm updated = new Alarm(current.id(), current.deviceId(), current.patientId(), current.severity(), current.category(),
                 current.message(), current.raisedAt(), Instant.now(), nurse);
         alarms.put(alarmId, updated);
@@ -214,5 +214,29 @@ public class PlatformService {
         AuditEvent audit = new AuditEvent(UUID.randomUUID(), producer, auditAction, resource, correlation, Instant.now());
         auditEvents.put(audit.id(), audit);
         return correlation;
+    }
+
+    private Device getRequiredDevice(UUID deviceId) {
+        Device device = devices.get(deviceId);
+        if (device == null) {
+            throw new IllegalArgumentException("Device not found: " + deviceId);
+        }
+        return device;
+    }
+
+    private TherapySession getRequiredTherapySession(UUID sessionId) {
+        TherapySession session = therapies.get(sessionId);
+        if (session == null) {
+            throw new IllegalArgumentException("Therapy session not found: " + sessionId);
+        }
+        return session;
+    }
+
+    private Alarm getRequiredAlarm(UUID alarmId) {
+        Alarm alarm = alarms.get(alarmId);
+        if (alarm == null) {
+            throw new IllegalArgumentException("Alarm not found: " + alarmId);
+        }
+        return alarm;
     }
 }

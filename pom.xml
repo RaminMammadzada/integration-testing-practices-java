@@ -18,6 +18,7 @@
     <properties>
         <java.version>21</java.version>
         <testcontainers.version>1.20.2</testcontainers.version>
+        <skipITs>false</skipITs>
     </properties>
 
     <dependencyManagement>
@@ -127,6 +128,7 @@
                             <goal>verify</goal>
                         </goals>
                         <configuration>
+                            <skipITs>${skipITs}</skipITs>
                             <includes>
                                 <include>**/*IntegrationTest.java</include>
                             </includes>
