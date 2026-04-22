@@ -1,0 +1,36 @@
+spring:
+  application:
+    name: medibridge-pulse-platform
+  datasource:
+    url: jdbc:h2:mem:medibridge;DB_CLOSE_DELAY=-1;MODE=PostgreSQL
+    username: sa
+    password:
+    driver-class-name: org.h2.Driver
+  jpa:
+    hibernate:
+      ddl-auto: validate
+    properties:
+      hibernate:
+        format_sql: true
+  flyway:
+    enabled: true
+  kafka:
+    producer:
+      key-serializer: org.apache.kafka.common.serialization.StringSerializer
+      value-serializer: org.apache.kafka.common.serialization.StringSerializer
+
+integration:
+  kafka:
+    enabled: false
+  emr:
+    enabled: false
+    base-url: http://localhost:9999
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics
+
+server:
+  port: 8080
